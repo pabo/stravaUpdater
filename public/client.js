@@ -1,64 +1,85 @@
 const params = new URLSearchParams(window.location.search);
-console.log(params);
 
-function makeRequest (method, url, done) {
-    var xhr = new XMLHttpRequest();
-    xhr.open(method, url);
-    xhr.onload = function () {
-      done(null, xhr.response);
-    };
-    xhr.onerror = function () {
-      done(xhr.response);
-    };
-    xhr.send();
+function makeRequest(method, url, body, done) {
+  var xhr = new XMLHttpRequest();
+  xhr.open(method, url);
+
+  if (body) {
+    xhr.setRequestHeader("Content-Type", "application/json;charset=UTF-8");
   }
-  
-  
+  xhr.onload = function () {
+    done(null, xhr.response);
+  };
+  xhr.onerror = function () {
+    done(xhr.response);
+  };
+  xhr.send(JSON.stringify(body)); }
 
-if (params.get('logged_in') === 'true') {
-    console.log("true")
-    document.getElementById('loggedIn').style.display = '';
-    document.getElementById('notLoggedIn').style.display = 'none';
+const activityNames = {};
 
-    makeRequest('GET', '/last_activities', (err, activitiesJson) => {
-        if (err) { throw err; }
+let loggedIn = false;
+const groups = document.cookie.match(/access_token=(.*)(;|$)/);
 
-        const activities = JSON.parse(activitiesJson)
-        console.log(activities)
+if (groups) {
+  loggedIn = true;
+}
 
-        // update page with the activities
-        updateTableRows(activities);
-    });
+if (loggedIn) {
+  document.getElementById('loggedIn').style.display = '';
+  document.getElementById('notLoggedIn').style.display = 'none';
+
+  makeRequest('GET', '/last_activities', undefined, (err, activitiesJson) => {
+    if (err) { throw err; }
+
+    const activities = JSON.parse(activitiesJson)
+
+    // update page with the activities
+    updateTableRows(activities);
+
+    // update state with activities
+    for (const { id, name } of activities) {
+      activityNames[id] = name;
+    }
+
+  });
 }
 else {
-    console.log("false")
-    document.getElementById('loggedIn').style.display = 'none';
-    document.getElementById('notLoggedIn').style.display = '';
+  document.getElementById('loggedIn').style.display = 'none';
+  document.getElementById('notLoggedIn').style.display = '';
 }
 
 const updateTableRows = (activities) => {
-    const activityTableBody = document.querySelector('#activityTable tbody');
-    console.log(activityTableBody)
+  const activityTableBody = document.querySelector('#activityTable tbody');
 
-    const rows = [];
-    for (const {id, name, type} of activities) {
-        const row = document.createElement('tr');
+  const rows = [];
+  for (const { id, name, type } of activities) {
+    const row = document.createElement('tr');
 
-        const idTd = document.createElement('td');
-        idTd.appendChild(document.createTextNode(id));
-        row.appendChild(idTd);
+    row.insertAdjacentHTML("beforeend", `<td>${id}</td>`);
+    row.insertAdjacentHTML("beforeend", `<td>${type}</td>`);
+    row.insertAdjacentHTML("beforeend", `<td><input type="text" value="${name}" onChange="onChangeHandler(this, ${id})" /></td>`);
+    row.insertAdjacentHTML("beforeend", `<td><input type="button" value="update" onClick="updateActivityName(${id})" /></td>`);
 
-        const nameTd = document.createElement('td');
-        nameTd.appendChild(document.createTextNode(name));
-        row.appendChild(nameTd);
+    rows.push(row);
+  }
 
-        const typeTd = document.createElement('td');
-        typeTd.appendChild(document.createTextNode(type));
-        row.appendChild(typeTd);
+  activityTableBody.replaceChildren(...rows);
+}
 
-        rows.push(row);
-    }
-    console.log(rows)
 
-    activityTableBody.replaceChildren(...rows);
+const onChangeHandler = (target, id) => {
+  activityNames[id] = target.value
+}
+
+const updateActivityName = (id) => {
+  console.log(`udpating id ${id} with name ${activityNames[id]}`);
+
+  makeRequest(
+    'PUT',
+    '/update_activity_name',
+    { id, name: activityNames[id] },
+    (err, response) => {
+      if (err) { throw err; }
+      console.log("update response: ", response);
+  });
 }

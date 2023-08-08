@@ -14,35 +14,66 @@ const ACCESS_TOKEN_COOKIE_NAME = 'access_token';
 
 console.log("client id is", CLIENT_ID)
 
-const API_BASE_URI ='https://www.strava.com/api/v3';
+const API_BASE_URI = 'https://www.strava.com/api/v3';
 
-var privateKey  = fs.readFileSync(__dirname + '/../certs/RSA-privkey.pem', 'utf8');
+var privateKey = fs.readFileSync(__dirname + '/../certs/RSA-privkey.pem', 'utf8');
 var certificate = fs.readFileSync(__dirname + '/../certs/RSA-cert.pem', 'utf8');
-var credentials = {key: privateKey, cert: certificate};
+var credentials = { key: privateKey, cert: certificate };
 
 // static
-app.use(express.static(__dirname + '/../public' ));
+app.use(express.static(__dirname + '/../public'));
 
 // cookies
 app.use(cookieParser())
+app.use(express.json()) // for parsing application/json
+
 
 app.get('/', function (req, res) {
-  res.send('<html><meta name="viewport" content="width=device-width" /><body><a href="/stravaAuth">Update last run to name "Easy"</a></body></html>');
+    res.send('<html><meta name="viewport" content="width=device-width" /><body><a href="/stravaAuth">Update last run to name "Easy"</a></body></html>');
 })
 
 app.get('/stravaAuth', function (req, res) {
     res.redirect(`https://www.strava.com/oauth/authorize?client_id=${CLIENT_ID}&response_type=code&scope=activity:write,activity:read&redirect_uri=https://pabonet.duckdns.org:4043/oauth_callback`)
 })
 
+app.put('/update_activity_name', function (req, res) {
+    const accessToken = req.cookies[ACCESS_TOKEN_COOKIE_NAME];
+
+    if (!accessToken) {
+        res.send(401);
+    }
+
+    console.log("req body: ", req.body);
+
+    if (req.body.id && req.body.name) {
+        axios.request({
+            method: 'put',
+            url: `${API_BASE_URI}/activities/${req.body.id}`,
+            headers: {
+                Authorization: `Bearer ${accessToken}`
+            },
+            data: {
+                name: req.body.name
+            }
+        }).then(updateResponse => {
+            console.log("success", updateResponse)
+            res.send('YEZ');
+        }).catch(error => {
+            console.log("update failed", error)
+            res.send(JSON.stringify(error));
+        })
+    }
+});
+
 app.get('/last_activities', function (req, res) {
     const accessToken = req.cookies[ACCESS_TOKEN_COOKIE_NAME];
 
-    if (!accessToken) { 
+    if (!accessToken) {
         res.send(401);
     }
     const HOURS_TO_LOOK_BACK = 72;
 
-    const lastActivities = (Date.now() - (HOURS_TO_LOOK_BACK * 1000 * 60 * 60))/1000;
+    const lastActivities = (Date.now() - (HOURS_TO_LOOK_BACK * 1000 * 60 * 60)) / 1000;
 
     axios.request({
         method: 'get',
@@ -79,10 +110,11 @@ app.get('/oauth_callback', function (req, res) {
             maxAge: 900000,
             secure: true,
             sameSite: true,
-            httpOnly: true
+            // this would prevent some xss but makes it harder to tell if you're logged in
+            // httpOnly: true
         });
 
-        res.redirect('/?logged_in=true');
+        res.redirect('/');
 
         // axios.request({
         //     method: 'get',
