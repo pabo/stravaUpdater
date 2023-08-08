@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 4043
 
-CMD ["node", "index.js"]
+CMD ["node", "src/server.js"]
